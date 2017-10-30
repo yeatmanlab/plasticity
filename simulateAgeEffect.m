@@ -1,6 +1,19 @@
-%%
+%% Set up simulation
+
+% These are the ages of the subjects in our sample
 ages = 7:.24:13
+
+% The noise SD is calculated based on the control subjects. Since the
+% controls are not showing change over the 8 weeks, then we can calculate
+% the standard deviation of change scores in the control subjects as an
+% estimate of noise.
 noiseSD = .4
+
+% Mean plasticity over the age range. This is defined based on the average
+% growth in the intervention subjects
+mp = 1;
+
+% Simulation parameters
 params = [7 1 1 0; 7 2 1 0; 7 3 1 0; 7 4 1 0; 7 5 1 0; 7 6 1 0]
 nrep = 100;
 
