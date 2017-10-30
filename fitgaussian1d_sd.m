@@ -1,16 +1,11 @@
 function [params,R2] = fitgaussian1d_sd(x,y,params0)
 
-% function [params,R2] = fitgaussian1d(x,y,params0,fixparams)
+% function [params,R2] = fitgaussian1d(x,y,params0)
 %
 % <x>,<y> are row vectors of the same size.  <x> specifies x-coordinates
 %   and <y> specifies values.  if <x> is [], default to 1:length(<y>).
-% <params0> (optional) is an initial seed.
-%   default is [] which means make up our own initial seed.
-%   TODO: our initial seed is fairly dumb; we should implement a smarter one!
-% <fixparams> (optional) is
-%   0 means do nothing special
-%   1 means fix the offset to 0
-%   default: 0.
+% <params0> is an initial seed. We only fit the SD so the other params get
+% fixed as they are set in params0
 %
 % use lsqcurvefit.m to estimate parameters of a 1D Gaussian function.
 % return:
@@ -34,7 +29,7 @@ if isempty(x)
 end
 
 % define options
-options = optimset('Display','iter','FunValCheck','on','MaxFunEvals',Inf,'MaxIter',Inf,'TolFun',1e-6,'TolX',1e-6);
+options = optimset('Display','off','FunValCheck','on','MaxFunEvals',Inf,'MaxIter',Inf,'TolFun',1e-6,'TolX',1e-6);
 
 % define bounds
 %              m    s    g    d
@@ -45,7 +40,7 @@ paramsub = Inf;
 [params,d,d,exitflag,output] = lsqcurvefit(@(pp,xx) ...
   evalgaussian1d([params0(1) pp params0(3:4)],xx),params0(2),x,y,paramslb,paramsub,options);
 assert(exitflag > 0);
-params = [params0(1) params params0(3:4)]
+params = [params0(1) params params0(3:4)];
 
 % how well did we do?
 R2 = calccod(evalgaussian1d(params,x),y);
