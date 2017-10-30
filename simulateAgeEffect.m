@@ -1,7 +1,7 @@
 %% Set up simulation
 
 % These are the ages of the subjects in our sample
-ages = 7:.24:13
+ages = 7:.24:13;
 
 % The noise SD is calculated based on the control subjects. Since the
 % controls are not showing change over the 8 weeks, then we can calculate
@@ -19,7 +19,18 @@ nrep = 1000; % number of iterations of simulated data
 
 % Adjust the mean plasticity to instead reflect the max plasticity. This
 % adjustment determines the peak of the gaussian.
-% TODO
+% Justification: Huber et al (2017) measured the mean plasticity over the
+% ages defined above. If we are hypothesizing that this mean came from data
+% collected over a period with gaussian falloff, then this gaussian would
+% have peaked much above the mean (for the younger subjects).
+for ss = 1:size(params,1)
+    % Calculate how much higher the peak is than the mean over this age
+    % range, and then scale gaussian peak parameter appropriately
+    params(ss,3) =  params(ss,3).*mp/mean(evalgaussian1d(params(ss,:),ages));
+    % Test to make sure the new mean is equal to what it should be within
+    % numerical precision
+    assert(mean(evalgaussian1d(params(ss,:),ages)) - mp < 10^-16);
+end
 
 %% Run simulation
 
@@ -51,8 +62,9 @@ c = parula(size(params,1));
 for ii = 1:size(params,1)
     plot(x0, evalgaussian1d(params(ii,:),x0),'-','color',c(ii,:));
 end
-patch([min(ages) max(ages) max(ages) min(ages) min(ages)],[0 0 mp mp 0].*1.05,[.5 .5 .5],...
-    'edgealpha',.3,'facealpha',.3)
+patch([min(ages) max(ages) max(ages) min(ages) min(ages)],[0 0 max(params(:,3)) max(params(:,3)) 0].*1.05,[.5 .5 .5],...
+    'edgealpha',.3,'facealpha',.3);
+plot([min(ages) max(ages)], [mp mp], '--k');
 axis('tight')
 xlabel('Age'); ylabel('Plastiity');
 
@@ -60,13 +72,13 @@ xlabel('Age'); ylabel('Plastiity');
 % and SD=0;
 params = vertcat([min(ages), 0, mp, 0], params);
 prc = horzcat([0; 0], prc);
+
 % Plot error on estimated parameters
 subplot(1,2,2); hold
 for ii = 1:size(params,1)-1
     plot([params(ii,2) params(ii+1,2)],[diff(prc(:,ii)) diff(prc(:,ii+1))],'-', 'color', c(ii,:));
     plot(params(ii+1,2), diff(prc(:,ii+1)),'o', 'color', c(ii,:), 'markerfacecolor', c(ii,:));
 end
-%plot(params(end,2), diff(prc(:,end)),'o', 'color', c(end,:), 'markerfacecolor', c(end,:));
 
 % Add the origin to the plot. This is
 axis tight
@@ -75,6 +87,6 @@ grid('on')
 xlabel('Sensitive period width'); ylabel('Estimation error');
 
 
-return 
+return
 
 
