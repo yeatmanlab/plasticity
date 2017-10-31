@@ -79,7 +79,7 @@ for ii = 2:size(params,1)
     % Plot unscaled as solid line
     plot([params(ii-1,2) params(ii,2)],[diff(prc(:,ii-1)) diff(prc(:,ii))],'-', 'color', c(ii,:),'linewidth',3);
     if any(params(ii,2) == plotparams)
-        plot(params(ii,2), diff(prc(:,ii)),'o', 'color', c(ii,:), 'markerfacecolor', c(ii,:), 'markersize',10);
+        plot(params(ii,2), diff(prc(:,ii)),'o', 'color', 'k', 'markerfacecolor', c(ii,:), 'markersize',10);
     end
 end
 axis tight
@@ -96,7 +96,7 @@ for ii = 2:size(params,1)
     if any(params(ii,2) == plotparams)
         patch([params(ii,2)-.2, params(ii,2)+.2, params(ii,2)+.2,params(ii,2)-.2,params(ii,2)-.2]...
             ,[prc(1,ii),prc(1,ii),prc(2,ii),prc(2,ii),prc(1,ii)]...
-            ,c(ii,:),'edgecolor',c(ii,:));
+            ,c(ii,:),'edgecolor','k');
     end
 end
 axis tight
@@ -109,13 +109,13 @@ subplot(1,4,4); hold
 rp = sum(r<0)./size(r,1);
 
 ii = 1;
-plot(params(ii,2), rp(:,1),'o', 'color', c(ii,:), 'markerfacecolor', c(ii,:), 'markersize',10);
+plot(params(ii,2), rp(:,1),'o', 'color', 'k', 'markerfacecolor', c(ii,:), 'markersize',10);
 
 for ii = 2:size(params,1)
     % Plot unscaled as solid line
     plot([params(ii-1,2) params(ii,2)],[rp(:,ii-1) rp(:,ii)],'-', 'color', c(ii,:),'linewidth',3);
     if any(params(ii,2) == plotparams)
-        plot(params(ii,2), rp(:,ii),'o', 'color', c(ii,:), 'markerfacecolor', c(ii,:), 'markersize',10);
+        plot(params(ii,2), rp(:,ii),'o', 'color', 'k', 'markerfacecolor', c(ii,:), 'markersize',10);
     end
 end
 xlabel('Sensitive period width'); ylabel('Power (Pearson r)');
