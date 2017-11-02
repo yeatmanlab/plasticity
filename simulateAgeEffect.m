@@ -2,6 +2,10 @@
 
 % These are the ages of the subjects in our sample
 ages = 7:.24:13;
+ages = [10.4740, 11.5362, 8.8179, 7.4928, 7.3039, 10.9888, 10.3098, ...
+    7.9966, 9.2614, 9.3680, 11.1504, 12.7053, 8.6235, 7.4873, 11.5335, ...
+    7.8214, 11.8594, 7.5505, 9.3299, 7.1698, 9.3680, 7.3586, 12.2672, ...
+    7.3930, 7.9892, 7.4095, 7.9407, 9.9612, 10.2541, 10.2158, 12.3400];
 
 % The noise SD is calculated based on the control subjects. Since the
 % controls are not showing change over the 8 weeks, then we can calculate
@@ -29,14 +33,14 @@ if scaleGaussian
 end
 
 %% Run simulation
-
+simparams = nan(nrep,4,size(params,1));
+r = nan(nrep,size(params,1));
 for ss = 1:size(params,1)
     fprintf('\nRunning %d iterations of simulation %d\n', nrep, ss)
     % Generate a simulation of the defined effect + noise
     simdata = repmat(evalgaussian1d(params(ss,:),ages),nrep, 1);
     simnoise = randn(size(simdata)) .* noiseSD;
     simdata = simdata + simnoise;
-
     
     % Fit the sensitive period model to each instance of the data
     for ii = 1:nrep
@@ -58,15 +62,30 @@ prc = squeeze(prc(:,2,:));
 figure;
 subplot(1,4,1); hold
 x0 = 7:.1:20;
-c = parula(size(params,1));
+c = [linspace(0,1,size(params,1))' repmat(0,size(params,1),2)];
+plotCI = [2]
+
 for ii = 1:size(params,1)
+    if any(params(ii,2) == plotCI)
+        % Draw CI for a few of the simulations
+        CI_x = [x0, fliplr(x0)];
+        CI_y = [evalgaussian1d([params(ii,1), prc(1,ii), 1, 0],x0), ...
+            fliplr(evalgaussian1d([params(ii,1), prc(2,ii), 1, 0],x0))];
+        patch(CI_x, CI_y, c(ii,:),'facealpha',.4, 'edgealpha',0);
+    end
+    
     if any(params(ii,2) == plotparams)
         plot(x0, evalgaussian1d([params(ii,1:2) 1 0],x0),'-','color',c(ii,:),'linewidth',3);
     end
 end
+
+% Draw the period over which we have data
 patch([min(ages) max(ages) max(ages) min(ages) min(ages)],[0 0 1 1 0].*1.05,[.5 .5 .5],...
-    'edgealpha',.3,'facealpha',.3);
+    'edgealpha',.5,'facealpha',.1);
+
+% Plot line at 2Sigma
 plot([min(x0) max(x0)], repmat(evalgaussian1d([params(end,1:2) 1 0],params(end,1)+2*params(end,2)),[1 2]), '--k');
+
 axis('tight')
 xlabel('Age'); ylabel('Plastiity');
 
@@ -85,10 +104,14 @@ end
 axis tight
 set(gca, 'xtick',0:2:6);
 grid('on')
-xlabel('Sensitive period width'); ylabel('Estimation error');
+xlabel('Sensitive period sigma'); ylabel('Estimation error');
 
 % Plot 68%CI on estimated parameters
 subplot(1,4,3); hold
+ii=1
+patch([params(ii,2)-.2, params(ii,2)+.2, params(ii,2)+.2,params(ii,2)-.2,params(ii,2)-.2]...
+    ,[prc(1,ii),prc(1,ii),prc(2,ii),prc(2,ii),prc(1,ii)]...
+    ,c(ii,:),'edgecolor','k');
 
 for ii = 2:size(params,1)
     plot([params(ii-1,2) params(ii,2)],[prc(1,ii-1) prc(1,ii)],'-', 'color', c(ii,:),'linewidth',3);
@@ -102,7 +125,7 @@ end
 axis tight
 set(gca, 'xtick',0:2:6);
 grid('on')
-xlabel('Sensitive period width'); ylabel('68% CI on parameter estimate');
+xlabel('Sensitive period sigma'); ylabel('68% CI on parameter estimate');
 
 % Probability of detecting a negative correlation
 subplot(1,4,4); hold
@@ -118,7 +141,7 @@ for ii = 2:size(params,1)
         plot(params(ii,2), rp(:,ii),'o', 'color', 'k', 'markerfacecolor', c(ii,:), 'markersize',10);
     end
 end
-xlabel('Sensitive period width'); ylabel('Power (Pearson r)');
+xlabel('Sensitive period sigma'); ylabel('Power (Pearson r)');
 grid('on')
 
 
