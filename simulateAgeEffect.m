@@ -87,7 +87,9 @@ patch([min(ages) max(ages) max(ages) min(ages) min(ages)],[0 0 1 1 0].*1.05,[.5 
 plot([min(x0) max(x0)], repmat(evalgaussian1d([params(end,1:2) 1 0],params(end,1)+2*params(end,2)),[1 2]), '--k');
 
 axis('tight')
+axis('square')
 xlabel('Age'); ylabel('Plastiity');
+set(gca, 'xtick', 7:2:20);
 
 % Plot error on estimated parameters
 subplot(1,4,2); hold
@@ -101,9 +103,9 @@ for ii = 2:size(params,1)
         plot(params(ii,2), diff(prc(:,ii)),'o', 'color', 'k', 'markerfacecolor', c(ii,:), 'markersize',10);
     end
 end
-axis tight
-set(gca, 'xtick',0:2:6);
-grid('on')
+axis('tight')
+axis('square')
+set(gca, 'xtick',1:1:6, 'ygrid', 'on');
 xlabel('Sensitive period sigma'); ylabel('Estimation error');
 
 % Plot 68%CI on estimated parameters
@@ -122,9 +124,10 @@ for ii = 2:size(params,1)
             ,c(ii,:),'edgecolor','k');
     end
 end
-axis tight
-set(gca, 'xtick',0:2:6);
-grid('on')
+axis('tight')
+axis('square')
+
+set(gca, 'xtick',1:1:6, 'ygrid', 'on');
 xlabel('Sensitive period sigma'); ylabel('68% CI on parameter estimate');
 
 % Probability of detecting a negative correlation
@@ -142,6 +145,10 @@ for ii = 2:size(params,1)
     end
 end
 xlabel('Sensitive period sigma'); ylabel('Power (Pearson r)');
-grid('on')
+set(gca, 'xtick',1:1:6, 'ygrid', 'on');
+axis('square')
 
+% Set size for figure
+set(gcf,'position',[529 778 1630 369])
+print('SensitivePeriod_sim.eps','-depsc')
 
