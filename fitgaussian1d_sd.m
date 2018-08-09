@@ -1,4 +1,4 @@
-function [params,R2] = fitgaussian1d_sd(x,y,params0)
+function [params, R2, params_tmp, R2_tmp] = fitgaussian1d_sd(x,y,params0,fitparams)
 
 % function [params,R2] = fitgaussian1d(x,y,params0)
 %
@@ -25,22 +25,46 @@ function [params,R2] = fitgaussian1d_sd(x,y,params0)
 
 % construct coordinates
 if isempty(x)
-  x = 1:length(y);
+    x = 1:length(y);
 end
 
+if ~exist('fitparams','var') || isempty(fitparams)
+    fitparams = 's';
+end
 % define options
 options = optimset('Display','off','FunValCheck','on','MaxFunEvals',Inf,'MaxIter',Inf,'TolFun',1e-6,'TolX',1e-6);
 
 % define bounds
 %              m    s    g    d
-paramslb = 0;
-paramsub = Inf;
 
-% do it
-[params,d,d,exitflag,output] = lsqcurvefit(@(pp,xx) ...
-  evalgaussian1d([params0(1) pp params0(3:4)],xx),params0(2),x,y,paramslb,paramsub,options);
-assert(exitflag > 0);
-params = [params0(1) params params0(3:4)];
-
-% how well did we do?
-R2 = calccod(evalgaussian1d(params,x),y);
+% Loop over starting params and find best fit. This avoids local minimum
+for ii = 1:size(params0,1)
+    if strcmp(fitparams,'s')
+        paramslb = 0;
+        paramsub = Inf;
+        [paramsFit,d,d,exitflag,output] = lsqcurvefit(@(pp,xx) ...
+            evalgaussian1d([params0(ii,1) pp params0(ii,3:4)],xx),params0(ii,2),x,y,paramslb,paramsub,options);
+        assert(exitflag > 0);
+        params_tmp(ii,:) = [params0(ii,1) paramsFit params0(ii,3:4)];
+    elseif strcmp(fitparams,'sg')
+        paramslb = [0 0];
+        paramsub = [Inf  Inf];
+        [paramsFit,d,d,exitflag,output] = lsqcurvefit(@(pp,xx) ...
+            evalgaussian1d([params0(ii,1) pp params0(ii,4)],xx),params0(ii,2:3),x,y,paramslb,paramsub,options);
+        assert(exitflag > 0);
+        params_tmp(ii,:) = [params0(ii,1) paramsFit params0(ii,4)];
+    elseif strcmp(fitparams,'sgd')
+        paramslb = [0 0 -Inf];
+        paramsub = [Inf  Inf  Inf];
+        [paramsFit,d,d,exitflag,output] = lsqcurvefit(@(pp,xx) ...
+            evalgaussian1d([params0(ii,1) pp],xx),params0(ii,2:4),x,y,paramslb,paramsub,options);
+        assert(exitflag > 0);
+        params_tmp(ii,:) = [params0(ii,1) paramsFit];
+    end
+    
+    % how well did we do?
+    R2_tmp(ii) = calccod(evalgaussian1d(params_tmp(ii,:),x),y);
+end
+[~,ix]=max(R2_tmp);
+params = params_tmp(ix,:);
+R2 = R2_tmp(ix);
