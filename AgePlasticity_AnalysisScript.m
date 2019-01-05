@@ -64,6 +64,50 @@ for ii = 1:nc
     pvalmat2(:,ii) = lme.Coefficients.pValue;
 end
 
+%% Render PCA coefficients on tracts
+
+cax = [-.03 .03]; % color range
+cmap = [linspace(.1,1,128)',linspace(.1,1,128)',linspace(.8,1,128)';...
+    linspace(1,.8,128)',linspace(1,.1,128)',linspace(1,.1,128)']
+numf = 200
+% Loop over PCs
+for pp = 1:nc
+    
+    % Loop over fiber groups
+    fgc=0;
+    for ff = fgnums
+        fgc=fgc+1;
+        % These are the rows containing the coeffs for fg(ff)
+        rows = coeff((fgc-1)*100+1:fgc*100,:);
+        
+        % create color values for pc
+        c = vals2colormap(rows(:,pp),cmap,cax);
+        
+        % Resample fibers to 100 nodes
+        fgt = dtiResampleFiberGroup(fg(ff),100);
+        for fff = 1:length(fgt.fibers)
+            cc{fff} = c;
+        end
+        
+        % Render
+        if ff>1, nf=0; AFQ_RenderFibers(fgt,'numfibers',numf,'color',cc,'newfig',nf);
+        else, nf=1; lh = AFQ_RenderFibers(fgt,'numfibers',numf,'color',cc,'newfig',nf);
+        end
+        
+        clear cc c;
+    end
+    
+    % Format and save figure
+    h = colorbar;colormap(cmap);caxis(cax)
+    ylabel(h,'-log_1_0(p-value) Age X Time interaction');
+    axis image; axis off;
+    print(sprintf('PC%dRend_1.png',pp),'-dpng','-r300');
+    view(90,0); camlight(lh,'right');print(sprintf('PC%dRend_2.png',pp),'-dpng','-r300');
+    view(0,90); camlight(lh,'right');print(sprintf('PC%dRend_3.png',pp),'-dpng','-r300');
+    figure;h = colorbar;colormap(cmap);caxis(cax);print('cbar.eps','-depsc');
+end
+
+
 %% Model intervention hours x age interaction for all tract means
 
 for ii = fgnums
@@ -240,15 +284,16 @@ stn.Row = lme.CoefficientNames;
 
 %% Make rendering
 fg = fgRead('~/git/lifespan/data/exampleSubject/exampleFibers.mat');
-numf = 300; % number of fibers to render
+numf = 30; % number of fibers to render
 
 % color fibers based on correlation (pearson's r) between age and MD change
 cax = [-.8 .8]; % color range
 cmap =AFQ_colormap('bgr',256);
 for ff = fgnums
     [~,t_pval,~,stats] = ttest(ind_nodes{ff});
-    [rval, pval] = corr(ind.age, ind_nodes{ff});
-    c = vals2colormap(rval,cmap,cax);
+    [rval(ff,:), pval] = corr(ind.age, ind_nodes{ff});
+    fprintf('\n%s max r = %.2f, p = %.3f\n',fgnames{ff},max(rval(ff,:)),min(pval))
+    c = vals2colormap(rval(ff,:),cmap,cax);
     fgt = dtiResampleFiberGroup(fg(ff),100);
     for fff = 1:length(fgt.fibers)
         cc{fff} = c;
@@ -264,23 +309,34 @@ h = colorbar;colormap(cmap);caxis(cax)
 ylabel(h,'Correlation with age');
 axis image; axis off;
 print('Rvals1.png','-dpng','-r300');
-view(90,0); camlight(lh,'right');print('Rvals2.png','-dpng','-r300');
-view(0,90); camlight(lh,'right');print('Rvals3.png','-dpng','-r300');
+view(90,0); camlight(lh,'infinite');print('Rvals2.png','-dpng','-r300');
+view(0,90); camlight(lh,'infinite');print('Rvals3.png','-dpng','-r300');
 figure;h = colorbar;colormap(cmap);caxis(cax);print('cbar_Rvals.eps','-depsc');
+% Make histogram figure
+figure;fgn=0;
+for ff = fgnums
+    fgn = fgn+1;
+    subplot(3,6,fgn);histogram(rval(ff,:),20);
+    title(fgnames{ff});xlabel('r value');
+end
+set(gcf,'position',[0 100 1000 600]);
+print('RvalueHist.eps','-depsc');
 
 % Color fibers based on p-value for Time X Age interaction (from LME)
 cax = [0 3]; % color range
-cmap = [linspace(.3,1,255)',linspace(.3,1,255)',ones(255,1).*.3]
+cmap = [linspace(.3,1,255)',linspace(.3,1,255)',ones(255,1).*.3];
 fgc=0;
 for ff = fgnums
     fgc=fgc+1;
     % These are the columns containing the p-value for fg(ff)
     cols = (fgc-1)*200+2:2:fgc*200;
-    pval = stn(4,cols);
-    % Convert table to array and -log10 it
-    logp = -log10(table2array(pval));
+    pval(ff,:) = table2array(stn(4,cols));
+    fprintf('\n%s AgeXTime Interaction min p = %.3f\n',fgnames{ff},min(pval(ff,:)))
     
-    c = vals2colormap(logp,cmap,cax);
+    % Convert table to array and -log10 it
+    logp(ff,:) = -log10(pval(ff,:));
+    
+    c = vals2colormap(logp(ff,:),cmap,cax);
     fgt = dtiResampleFiberGroup(fg(ff),100);
     for fff = 1:length(fgt.fibers)
         cc{fff} = c;
@@ -296,9 +352,22 @@ h = colorbar;colormap(cmap);caxis(cax)
 ylabel(h,'-log_1_0(p-value) Age X Time interaction');
 axis image; axis off;
 print('Pvals_Int1.png','-dpng','-r300');
-view(90,0); camlight(lh,'right');print('Pvals_Int2.png','-dpng','-r300');
-view(0,90); camlight(lh,'right');print('Pvals_Int3.png','-dpng','-r300');
+view(90,0); camlight(lh,'infinite');print('Pvals_Int2.png','-dpng','-r300');
+view(0,90); camlight(lh,'infinite');print('Pvals_Int3.png','-dpng','-r300');
 figure;h = colorbar;colormap(cmap);caxis(cax);print('cbar_Int.eps','-depsc');
+% Make histogram figure
+figure;fgn=0;
+for ff = fgnums
+    fgn = fgn+1;
+    subplot(3,6,fgn);h=histogram(logp(ff,:),20,'BinLimits',[0 4]);axis('tight')
+    text(h.BinEdges(max(find(h.Values)))+h.BinWidth,max(h.Values)/15,...
+        ['\downarrow' sprintf('p = %.3f',min(pval(ff,:)))],'color',[.7 0 0]);
+    title(fgnames{ff});xlabel('p-value');
+    set(gca,'xtick',[2 4],'xticklabels',{'0.01' '0.0001'});
+end
+set(gcf,'position',[0 100 1000 600]);
+print('PvalueHist_Interaction.eps','-depsc');
+
 % Color fibers based on p-value for main effect of Time (from LME)
 cax = [0 3]; % color range
 fgc=0;
@@ -306,11 +375,13 @@ for ff = fgnums
     fgc=fgc+1;
     % These are the columns containing the p-value for fg(ff)
     cols = (fgc-1)*200+2:2:fgc*200;
-    pval = stn_main(2,cols);
-    % Convert table to array and -log10 it
-    logp = -log10(table2array(pval));
+    pval(ff,:) = table2array(stn_main(2,cols));
+    fprintf('\n%s Main Effect Time min p = %.3f\n',fgnames{ff},min(pval(ff,:)))
     
-    c = vals2colormap(logp,cmap,cax);
+    % Convert table to array and -log10 it
+    logp(ff,:) = -log10(pval(ff,:));
+    
+    c = vals2colormap(logp(ff,:),cmap,cax);
     fgt = dtiResampleFiberGroup(fg(ff),100);
     for fff = 1:length(fgt.fibers)
         cc{fff} = c;
@@ -326,8 +397,20 @@ h = colorbar;colormap(cmap);caxis(cax)
 ylabel(h,'-log_1_0(p-value) Change over intervention');
 axis image; axis off;
 print('Pvals_time1.png','-dpng','-r300');
-view(90,0); camlight(lh,'right');print('Pvals_time2.png','-dpng','-r300');
-view(0,90); camlight(lh,'right');print('Pvals_time3.png','-dpng','-r300');
+view(90,0); camlight(lh,'infinite');print('Pvals_time2.png','-dpng','-r300');
+view(0,90); camlight(lh,'infinite');print('Pvals_time3.png','-dpng','-r300');
+% Make histogram figure
+figure;fgn=0;
+for ff = fgnums
+    fgn = fgn+1;
+    subplot(3,6,fgn);h=histogram(logp(ff,:),20,'BinLimits',[0 4]);axis('tight')
+    text(h.BinEdges(max(find(h.Values)))+h.BinWidth,max(h.Values)/15,...
+        [sprintf('p = %.4f',min(pval(ff,:))) '\downarrow'],'color',[.7 0 0], 'horizontalAlignment', 'right');
+    title(fgnames{ff});xlabel('p-value');
+    set(gca,'xtick',[2 4],'xticklabels',{'0.01' '0.0001'});
+end
+set(gcf,'position',[0 100 1000 600]);
+print('PvalueHist_MainEffect.eps','-depsc');
 
 %% Show growth trajectories for younger versus older subjects
 
@@ -377,6 +460,37 @@ lme_wj = fitlme(d,'wj ~ int_time_z * age_z + (1|sub)')
 lme_tw = fitlme(d,'towre ~ int_time_z * age_z + (1|sub)')
 
 return
+
+%% Plots of plasticity versus age
+figure; hold
+age = ind.age./12;
+lme = fitlme(d,'pc1 ~ int_time + (int_time | sub)');
+[B,Bnames,RE] = randomEffects(lme)
+RE(~strcmp(stats.Name,'int_time'),:)= [];
+% This is an estimnate of each individuals growth rate. NOTE WE MAKE IT
+% NEGATIVE FOR PLOTTING PURPOSES
+m_est = lme.Coefficients.Estimate(2); % average growth rate
+m_est_se = lme.Coefficients.SE(2); % SE on average growth rate
+ind_est = -(RE.Estimate + m_est);
+% Get the age for each subject
+for ii = 1:size(RE,1)
+    % Get age (scaled to years /12) for each sub
+    lme_age(ii) = d(strcmp(d.sub,RE.Level{ii}),:).age(1)./12;
+end
+
+% baseed on individual estimate
+plot(age, ind.pc1_sl,'ko','markerfacecolor','k')
+lsline
+
+% baseed on estimates from LME
+figure; hold
+plot(lme_age, ind_est,'ko','markerfacecolor','k')
+lsline
+
+% Plot gaussian model
+xx = 6:.1:13;
+plot(xx,evalgaussian1d([6 1 max(ind_est).*.8 -m_est],xx))
+
 %% Fit gaussian model to data
 
 for ff = fgnums
