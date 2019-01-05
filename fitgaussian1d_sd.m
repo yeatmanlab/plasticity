@@ -32,7 +32,7 @@ if ~exist('fitparams','var') || isempty(fitparams)
     fitparams = 's';
 end
 % define options
-options = optimset('Display','off','FunValCheck','on','MaxFunEvals',Inf,'MaxIter',Inf,'TolFun',1e-6,'TolX',1e-6);
+options = optimset('Display','off','FunValCheck','on','MaxFunEvals',Inf,'MaxIter',Inf,'TolFun',1e-12,'TolX',1e-12);
 
 % define bounds
 %              m    s    g    d
