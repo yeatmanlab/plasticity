@@ -1,10 +1,13 @@
 %% Load in data
 addpath(genpath('~/git/plasticity'))
-load('~/git/plasticity/data/afqOut_20180621_concat.mat');
+load('~/git/plasticity/data/afqOut_20180621_concat_IntSubs.mat');
 rmsubs = afq.metadata.outliers |  afq.metadata.motion>0.7 ...
-    | afq.sub_group==0 | afq.metadata.session==5;
+    | afq.sub_group==0 | afq.metadata.session>4;
 afq = AFQ_RemoveSubjects(afq,rmsubs);
 afq = AFQ_SubjectAvgMetadata(afq);
+
+% Load fibers for renderings
+fg = fgRead('~/git/plasticity/data/exampleFibers.mat');
 
 %% Organize data
 
@@ -69,7 +72,7 @@ end
 cax = [-.03 .03]; % color range
 cmap = [linspace(.1,1,128)',linspace(.1,1,128)',linspace(.8,1,128)';...
     linspace(1,.8,128)',linspace(1,.1,128)',linspace(1,.1,128)']
-numf = 200
+numf = 200;
 % Loop over PCs
 for pp = 1:nc
     
@@ -283,12 +286,12 @@ end
 stn.Row = lme.CoefficientNames;
 
 %% Make rendering
-fg = fgRead('~/git/lifespan/data/exampleSubject/exampleFibers.mat');
-numf = 30; % number of fibers to render
+numf = 200; % number of fibers to render
 
 % color fibers based on correlation (pearson's r) between age and MD change
 cax = [-.8 .8]; % color range
 cmap =AFQ_colormap('bgr',256);
+clear rval pval;
 for ff = fgnums
     [~,t_pval,~,stats] = ttest(ind_nodes{ff});
     [rval(ff,:), pval] = corr(ind.age, ind_nodes{ff});
