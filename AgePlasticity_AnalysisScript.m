@@ -1,30 +1,38 @@
 %% Load in data
 addpath(genpath('~/git/plasticity'))
-load('~/git/plasticity/data/afqOut_20180621_concat_IntSubs.mat');
+% load('~/git/plasticity/data/afqOut_20180621_concat.mat');
+load('~/git/plasticity/data/afqOut_20190403_subid_session_meta_motion_outliers_controlrecoded_twre.mat')
 rmsubs = afq.metadata.outliers |  afq.metadata.motion>0.7 ...
-    | afq.sub_group==0 | afq.metadata.session>4;
+    | afq.sub_group>1 | afq.metadata.session>=5;
 afq = AFQ_RemoveSubjects(afq,rmsubs);
-afq = AFQ_SubjectAvgMetadata(afq);
-
-% Load fibers for renderings
-fg = fgRead('~/git/plasticity/data/exampleFibers.mat');
+% afq = AFQ_SubjectAvgMetadata(afq);
 
 %% Organize data
-
 fgnames = AFQ_get(afq,'fgnames');
-params = {'dki_MD_noden'};
-nodes = 31:70;
+params = {'dki_MD'};
+
+nodes = 31:70; % does this matter?
+
 d = table;
-d.sub = afq.sub_names;
-d.int_time = afq.metadata.time;
-d.int_time_z = zscore(afq.metadata.time);
+d.sub = afq.sub_names(~rmsubs);
+d.int_time = afq.metadata.int_hours;
+d.int_time_z = zscore(afq.metadata.int_hours);
 d.age_all = afq.metadata.visit_age;
-d.age = afq.metadata.sm_visit_age;
-d.age_z = zscore(afq.metadata.sm_visit_age);
-d.towre_m = zscore(afq.metadata.sm_twre_index);
-d.wj_m    = zscore(afq.metadata.sm_wj_brs);
-d.towre_dm = afq.metadata.sdm_twre_index;
-d.wj_dm = afq.metadata.sdm_wj_brs;
+d.int_days = afq.metadata.int_time;
+
+% make a variable storing session 1 age for each sub - was this actually
+% meant to be the mean age, or somthing else? note that timepoint 1 age is 
+% also stored as d.age1 below
+usubs = unique(d.sub);
+for ii = 1:numel(usubs)
+    sind = find(strcmp(d.sub,usubs(ii)));
+    initage = d.age_all(min(sind));
+    d.age(sind) = initage;
+    d.sub_group(sind) = afq.sub_group(sind);
+end
+
+d.age_z = zscore(d.age);
+
 d.wj = afq.metadata.wj_brs;
 d.towre = afq.metadata.twre_index;
 d.sess = categorical(afq.metadata.session);
@@ -50,7 +58,7 @@ md = []; fa = [];
 
 % Collect diffusion properties in a matrix
 for ii = fgnums
-    md = horzcat(md,AFQ_get(afq,fgnames{ii},'dki_MD_noden'));
+    md = horzcat(md,AFQ_get(afq,fgnames{ii},'dki_MD'));
     %fa = horzcat(fa,AFQ_get(afq,fgnames{ii},'dki_FA_noden'));
 end
 
@@ -58,68 +66,81 @@ end
 [coeff, score, latent, tsquared, explained] = pca(md,'NumComponents',nc);
 fprintf('\n Variance PC1=%.2f, PC2=%.2f, PC3=%.2f, PC4=%.2f, PC5=%.2f, total=%.2f',explained(1:nc),sum(explained(1:nc)))
 
-% Add PCs into data table and fit LME
-for ii = 1:nc
-    d.(sprintf('pc%d',ii))=score(:,ii);
-    lme = fitlme(d,sprintf('pc%d ~ int_time  + (1|sub)',ii))
-    pvalmat(:,ii) = lme.Coefficients.pValue;
-    lme = fitlme(d,sprintf('pc%d ~ int_time_z*age_z  + (1|sub)',ii))
-    pvalmat2(:,ii) = lme.Coefficients.pValue;
-end
+% project the PCs back into node space, create rendering
+% start with PC1
+weights1 = reshape(coeff(:,1),100,18);
+weights2 = reshape(coeff(:,2),100,18);
+weights3 = reshape(coeff(:,3),100,18);
+weights4 = reshape(coeff(:,4),100,18);
 
-%% Render PCA coefficients on tracts
+cd ~/Desktop/LMB-Diffusion/Data/
+fg = fgRead('exampleFibers.mat');
 
-cax = [-.03 .03]; % color range
-cmap = [linspace(.1,1,128)',linspace(.1,1,128)',linspace(.8,1,128)';...
-    linspace(1,.8,128)',linspace(1,.1,128)',linspace(1,.1,128)']
-numf = 200;
-% Loop over PCs
-for pp = 1:nc
-    
-    % Loop over fiber groups
-    fgc=0;
-    for ff = fgnums
-        fgc=fgc+1;
-        % These are the rows containing the coeffs for fg(ff)
-        rows = coeff((fgc-1)*100+1:fgc*100,:);
-        
-        % create color values for pc
-        c = vals2colormap(rows(:,pp),cmap,cax);
-        
-        % Resample fibers to 100 nodes
-        fgt = dtiResampleFiberGroup(fg(ff),100);
-        for fff = 1:length(fgt.fibers)
-            cc{fff} = c;
-        end
-        
-        % Render
-        if ff>1, nf=0; AFQ_RenderFibers(fgt,'numfibers',numf,'color',cc,'newfig',nf);
-        else, nf=1; lh = AFQ_RenderFibers(fgt,'numfibers',numf,'color',cc,'newfig',nf);
-        end
-        
-        clear cc c;
+tracts = [1:6,9:20]; %4,9:20]; %[9,10,11,13,15,19] %[9:16,19:20]; %[1 3 9 10 11 13 15 17 19]
+
+im = niftiRead('t1_class_2DTI.nii.gz');
+im.data = im.data == 4; %(hh + 2); % 3 = RH missing, 4 = LH missing
+msh = AFQ_meshCreate(im,'boxfilter',5); 
+
+n = 0;
+for ii = 1:numel(tracts)
+%     pvals = pp(1,:)';
+    n = n+1;
+    % Reseamples each fiber to 100 nodes
+    fg_resampled = dtiResampleFiberGroup(fg(tracts(ii)), 100);
+    % now make colors from p-values
+    crange = [min(weights2(:)), max(weights2(:))/2];
+    c = vals2colormap(weights2(:,ii), jet(256), crange);
+    % make this into a cell array the same size as fibers
+    cvals = {};
+    for jj = 1:length(fg_resampled.fibers)
+        cvals{jj} = c;
     end
-    
-    % Format and save figure
-    h = colorbar;colormap(cmap);caxis(cax)
-    ylabel(h,'-log_1_0(p-value) Age X Time interaction');
-    axis image; axis off;
-    print(sprintf('PC%dRend_1.png',pp),'-dpng','-r300');
-    view(90,0); camlight(lh,'right');print(sprintf('PC%dRend_2.png',pp),'-dpng','-r300');
-    view(0,90); camlight(lh,'right');print(sprintf('PC%dRend_3.png',pp),'-dpng','-r300');
-    figure;h = colorbar;colormap(cmap);caxis(cax);print('cbar.eps','-depsc');
+    % Render fibers only opening a new figure window for the first fiber
+    % group
+    AFQ_RenderFibers(fg_resampled, 'lines', 'numfibers', 100, 'color', cvals,...
+        'newfig', n<=1); % , 'subplot', [1,2,hh]
+end
+% colormap('jet'), colorbar
+patch(msh.tr)
+shading interp
+axis image
+axis off
+
+% Add PCs into data table and fit LME
+% for ii = 1:nc
+%     d.(sprintf('pc%d',ii))=score(:,ii);
+%     lme = fitlme(d,sprintf('pc%d ~ int_time  + (1|sub)',ii))
+%     pvalmat(:,ii) = lme.Coefficients.pValue;
+%     lme = fitlme(d,sprintf('pc%d ~ int_time_z*age_z  + (1|sub)',ii))
+%     pvalmat2(:,ii) = lme.Coefficients.pValue;
+% end
+
+% or, just add pcs to the data table without fitting lme as above (need to
+% do this if controls are included for calculating the interaction)
+for ii = 1:nc
+    d.(sprintf('pc%d',ii))=score(:,ii);   
 end
 
+% interaction for pc1
+lme1 = fitlme(d,'pc1 ~ int_days*sub_group + (1 | sub)')
+lme2 = fitlme(d,'pc2 ~ int_days*sub_group + (1 | sub)')
+lme3 = fitlme(d,'pc3 ~ int_days*sub_group + (1 | sub)')
+lme4 = fitlme(d,'pc4 ~ int_days*sub_group + (1 | sub)')
+lme5 = fitlme(d,'pc5 ~ int_days*sub_group + (1 | sub)')
 
 %% Model intervention hours x age interaction for all tract means
-
 for ii = fgnums
     fgnospace{ii} = fgnames{ii};
     fgnospace{ii}(isspace(fgnospace{ii})) = [];
     for pp = 1:length(params)
         tmp = AFQ_get(afq,fgnames{ii},params{pp});
         d.(fgnospace{ii}) = nanmean(tmp(:,nodes),2);
-        lme = fitlme(d,sprintf('%s ~ int_time*age_z  + (1|sub)',fgnospace{ii}));
+        % temporary frame with just intervention subjects
+        dI = d(d.sub_group == 1, {'sub','int_time','int_days','age','age_z',fgnospace{ii}});
+        lme = fitlme(dI,sprintf('%s ~ int_time*age  + (1|sub)',fgnospace{ii}));
+        % testing the timeXgroup interaction for each tract - to do, move this to avoid confusion:
+%         lme = fitlme(d,sprintf('%s ~ int_days*sub_group  + (1|sub)',fgnospace{ii}));
         st.([fgnospace{ii} '_mean_Tstat']) = lme.Coefficients.tStat;
         st.([fgnospace{ii} '_mean_Pval']) = lme.Coefficients.pValue;
     end
@@ -286,17 +307,16 @@ end
 stn.Row = lme.CoefficientNames;
 
 %% Make rendering
-numf = 200; % number of fibers to render
+fg = fgRead('~/git/lifespan/data/exampleSubject/exampleFibers.mat');
+numf = 300; % number of fibers to render
 
 % color fibers based on correlation (pearson's r) between age and MD change
 cax = [-.8 .8]; % color range
 cmap =AFQ_colormap('bgr',256);
-clear rval pval;
 for ff = fgnums
     [~,t_pval,~,stats] = ttest(ind_nodes{ff});
-    [rval(ff,:), pval] = corr(ind.age, ind_nodes{ff});
-    fprintf('\n%s max r = %.2f, p = %.3f\n',fgnames{ff},max(rval(ff,:)),min(pval))
-    c = vals2colormap(rval(ff,:),cmap,cax);
+    [rval, pval] = corr(ind.age, ind_nodes{ff});
+    c = vals2colormap(rval,cmap,cax);
     fgt = dtiResampleFiberGroup(fg(ff),100);
     for fff = 1:length(fgt.fibers)
         cc{fff} = c;
@@ -312,34 +332,23 @@ h = colorbar;colormap(cmap);caxis(cax)
 ylabel(h,'Correlation with age');
 axis image; axis off;
 print('Rvals1.png','-dpng','-r300');
-view(90,0); camlight(lh,'infinite');print('Rvals2.png','-dpng','-r300');
-view(0,90); camlight(lh,'infinite');print('Rvals3.png','-dpng','-r300');
+view(90,0); camlight(lh,'right');print('Rvals2.png','-dpng','-r300');
+view(0,90); camlight(lh,'right');print('Rvals3.png','-dpng','-r300');
 figure;h = colorbar;colormap(cmap);caxis(cax);print('cbar_Rvals.eps','-depsc');
-% Make histogram figure
-figure;fgn=0;
-for ff = fgnums
-    fgn = fgn+1;
-    subplot(3,6,fgn);histogram(rval(ff,:),20);
-    title(fgnames{ff});xlabel('r value');
-end
-set(gcf,'position',[0 100 1000 600]);
-print('RvalueHist.eps','-depsc');
 
 % Color fibers based on p-value for Time X Age interaction (from LME)
 cax = [0 3]; % color range
-cmap = [linspace(.3,1,255)',linspace(.3,1,255)',ones(255,1).*.3];
+cmap = [linspace(.3,1,255)',linspace(.3,1,255)',ones(255,1).*.3]
 fgc=0;
 for ff = fgnums
     fgc=fgc+1;
     % These are the columns containing the p-value for fg(ff)
     cols = (fgc-1)*200+2:2:fgc*200;
-    pval(ff,:) = table2array(stn(4,cols));
-    fprintf('\n%s AgeXTime Interaction min p = %.3f\n',fgnames{ff},min(pval(ff,:)))
-    
+    pval = stn(4,cols);
     % Convert table to array and -log10 it
-    logp(ff,:) = -log10(pval(ff,:));
+    logp = -log10(table2array(pval));
     
-    c = vals2colormap(logp(ff,:),cmap,cax);
+    c = vals2colormap(logp,cmap,cax);
     fgt = dtiResampleFiberGroup(fg(ff),100);
     for fff = 1:length(fgt.fibers)
         cc{fff} = c;
@@ -355,22 +364,9 @@ h = colorbar;colormap(cmap);caxis(cax)
 ylabel(h,'-log_1_0(p-value) Age X Time interaction');
 axis image; axis off;
 print('Pvals_Int1.png','-dpng','-r300');
-view(90,0); camlight(lh,'infinite');print('Pvals_Int2.png','-dpng','-r300');
-view(0,90); camlight(lh,'infinite');print('Pvals_Int3.png','-dpng','-r300');
+view(90,0); camlight(lh,'right');print('Pvals_Int2.png','-dpng','-r300');
+view(0,90); camlight(lh,'right');print('Pvals_Int3.png','-dpng','-r300');
 figure;h = colorbar;colormap(cmap);caxis(cax);print('cbar_Int.eps','-depsc');
-% Make histogram figure
-figure;fgn=0;
-for ff = fgnums
-    fgn = fgn+1;
-    subplot(3,6,fgn);h=histogram(logp(ff,:),20,'BinLimits',[0 4]);axis('tight')
-    text(h.BinEdges(max(find(h.Values)))+h.BinWidth,max(h.Values)/15,...
-        ['\downarrow' sprintf('p = %.3f',min(pval(ff,:)))],'color',[.7 0 0]);
-    title(fgnames{ff});xlabel('p-value');
-    set(gca,'xtick',[2 4],'xticklabels',{'0.01' '0.0001'});
-end
-set(gcf,'position',[0 100 1000 600]);
-print('PvalueHist_Interaction.eps','-depsc');
-
 % Color fibers based on p-value for main effect of Time (from LME)
 cax = [0 3]; % color range
 fgc=0;
@@ -378,13 +374,11 @@ for ff = fgnums
     fgc=fgc+1;
     % These are the columns containing the p-value for fg(ff)
     cols = (fgc-1)*200+2:2:fgc*200;
-    pval(ff,:) = table2array(stn_main(2,cols));
-    fprintf('\n%s Main Effect Time min p = %.3f\n',fgnames{ff},min(pval(ff,:)))
-    
+    pval = stn_main(2,cols);
     % Convert table to array and -log10 it
-    logp(ff,:) = -log10(pval(ff,:));
+    logp = -log10(table2array(pval));
     
-    c = vals2colormap(logp(ff,:),cmap,cax);
+    c = vals2colormap(logp,cmap,cax);
     fgt = dtiResampleFiberGroup(fg(ff),100);
     for fff = 1:length(fgt.fibers)
         cc{fff} = c;
@@ -400,20 +394,8 @@ h = colorbar;colormap(cmap);caxis(cax)
 ylabel(h,'-log_1_0(p-value) Change over intervention');
 axis image; axis off;
 print('Pvals_time1.png','-dpng','-r300');
-view(90,0); camlight(lh,'infinite');print('Pvals_time2.png','-dpng','-r300');
-view(0,90); camlight(lh,'infinite');print('Pvals_time3.png','-dpng','-r300');
-% Make histogram figure
-figure;fgn=0;
-for ff = fgnums
-    fgn = fgn+1;
-    subplot(3,6,fgn);h=histogram(logp(ff,:),20,'BinLimits',[0 4]);axis('tight')
-    text(h.BinEdges(max(find(h.Values)))+h.BinWidth,max(h.Values)/15,...
-        [sprintf('p = %.4f',min(pval(ff,:))) '\downarrow'],'color',[.7 0 0], 'horizontalAlignment', 'right');
-    title(fgnames{ff});xlabel('p-value');
-    set(gca,'xtick',[2 4],'xticklabels',{'0.01' '0.0001'});
-end
-set(gcf,'position',[0 100 1000 600]);
-print('PvalueHist_MainEffect.eps','-depsc');
+view(90,0); camlight(lh,'right');print('Pvals_time2.png','-dpng','-r300');
+view(0,90); camlight(lh,'right');print('Pvals_time3.png','-dpng','-r300');
 
 %% Show growth trajectories for younger versus older subjects
 
@@ -463,37 +445,6 @@ lme_wj = fitlme(d,'wj ~ int_time_z * age_z + (1|sub)')
 lme_tw = fitlme(d,'towre ~ int_time_z * age_z + (1|sub)')
 
 return
-
-%% Plots of plasticity versus age
-figure; hold
-age = ind.age./12;
-lme = fitlme(d,'pc1 ~ int_time + (int_time | sub)');
-[B,Bnames,RE] = randomEffects(lme)
-RE(~strcmp(stats.Name,'int_time'),:)= [];
-% This is an estimnate of each individuals growth rate. NOTE WE MAKE IT
-% NEGATIVE FOR PLOTTING PURPOSES
-m_est = lme.Coefficients.Estimate(2); % average growth rate
-m_est_se = lme.Coefficients.SE(2); % SE on average growth rate
-ind_est = -(RE.Estimate + m_est);
-% Get the age for each subject
-for ii = 1:size(RE,1)
-    % Get age (scaled to years /12) for each sub
-    lme_age(ii) = d(strcmp(d.sub,RE.Level{ii}),:).age(1)./12;
-end
-
-% baseed on individual estimate
-plot(age, ind.pc1_sl,'ko','markerfacecolor','k')
-lsline
-
-% baseed on estimates from LME
-figure; hold
-plot(lme_age, ind_est,'ko','markerfacecolor','k')
-lsline
-
-% Plot gaussian model
-xx = 6:.1:13;
-plot(xx,evalgaussian1d([6 1 max(ind_est).*.8 -m_est],xx))
-
 %% Fit gaussian model to data
 
 for ff = fgnums
