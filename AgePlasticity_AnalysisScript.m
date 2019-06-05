@@ -1,6 +1,6 @@
 %% Load in data
 addpath(genpath('~/git/plasticity'))
-load('~/git/plasticity/data/afqOut_20180621_concat_IntSubs.mat');
+load('~/git/plasticity/data/afqOut_20190605.mat');
 rmsubs = afq.metadata.outliers |  afq.metadata.motion>0.7 ...
     | afq.sub_group==0 | afq.metadata.session>4;
 afq = AFQ_RemoveSubjects(afq,rmsubs);
