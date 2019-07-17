@@ -1,23 +1,28 @@
 %% Load in data
 addpath(genpath('~/git/plasticity'))
-load('~/git/plasticity/data/afqOut_20190605.mat');
-rmsubs = afq.metadata.outliers |  afq.metadata.motion>0.7 ...
+load('~/git/plasticity/data/afqOut_20190715_meta.mat');
+
+% See if there are any subjects with crazy outlier values
+afq.metadata.outliers = AFQ_outliers(afq, {'dki_MD_nnk' 'dki_FA_nnk' 'dki_MK_nnk'}, 10, 100);
+
+% Remove subjects with lots of motion or lots of outliers
+rmsubs = afq.metadata.outliers |  afq.metadata.motion>1.5 ...
     | afq.sub_group==0 | afq.metadata.session>4;
 afq = AFQ_RemoveSubjects(afq,rmsubs);
 afq = AFQ_SubjectAvgMetadata(afq);
 
 % Load fibers for renderings
-fg = fgRead('~/git/plasticity/data/exampleFibers.mat');
+fg = fgRead('~/git/plasticity/data/exampleSubject/exampleFibers.mat');
 
 %% Organize data
 
 fgnames = AFQ_get(afq,'fgnames');
-params = {'dki_MD_noden'};
+params = {'dki_MD_nnk'};
 nodes = 31:70;
 d = table;
 d.sub = afq.sub_names;
-d.int_time = afq.metadata.time;
-d.int_time_z = zscore(afq.metadata.time);
+d.int_time = afq.metadata.int_hours;
+d.int_time_z = zscore(afq.metadata.int_hours);
 d.age_all = afq.metadata.visit_age;
 d.age = afq.metadata.sm_visit_age;
 d.age_z = zscore(afq.metadata.sm_visit_age);
@@ -42,7 +47,7 @@ d.young = d.age1<9*12;
 st = table;
 stn = table;
 stn_main = table;
-fgnums = [1:6 9:20]
+fgnums = [1:6 9:20];
 
 %% PCA
 nc = 5; % number of pcs
@@ -50,7 +55,7 @@ md = []; fa = [];
 
 % Collect diffusion properties in a matrix
 for ii = fgnums
-    md = horzcat(md,AFQ_get(afq,fgnames{ii},'dki_MD_noden'));
+    md = horzcat(md,AFQ_get(afq,fgnames{ii},'dki_MD_nnk'));
     %fa = horzcat(fa,AFQ_get(afq,fgnames{ii},'dki_FA_noden'));
 end
 
