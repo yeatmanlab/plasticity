@@ -3,7 +3,7 @@ addpath(genpath('~/git/plasticity'))
 load('~/git/plasticity/data/afqOut_20190715_meta.mat');
 
 % See if there are any subjects with crazy outlier values
-afq.metadata.outliers = AFQ_outliers(afq, {'dki_MD_nnk' 'dki_FA_nnk' 'dki_MK_nnk'}, 10, 100);
+afq.metadata.outliers = AFQ_outliers(afq, {'dki_MD_nnk'}, 4, 40);
 
 % Remove subjects with lots of motion or lots of outliers
 rmsubs = afq.metadata.outliers |  afq.metadata.motion>1.5 ...
@@ -21,10 +21,10 @@ params = {'dki_MD_nnk'};
 nodes = 31:70;
 d = table;
 d.sub = afq.sub_names;
-d.int_time = afq.metadata.int_hours;
+d.int_time = afq.metadata.int_hours-nanmean(afq.metadata.int_hours); % center hours
 d.int_time_z = zscore(afq.metadata.int_hours);
 d.age_all = afq.metadata.visit_age;
-d.age = afq.metadata.sm_visit_age;
+d.age = afq.metadata.sm_visit_age-nanmean(afq.metadata.sm_visit_age); % center age
 d.age_z = zscore(afq.metadata.sm_visit_age);
 d.towre_m = zscore(afq.metadata.sm_twre_index);
 d.wj_m    = zscore(afq.metadata.sm_wj_brs);
@@ -124,7 +124,7 @@ for ii = fgnums
     for pp = 1:length(params)
         tmp = AFQ_get(afq,fgnames{ii},params{pp});
         d.(fgnospace{ii}) = nanmean(tmp(:,nodes),2);
-        lme = fitlme(d,sprintf('%s ~ int_time*age_z  + (1|sub)',fgnospace{ii}));
+        lme = fitlme(d,sprintf('%s ~ int_time*age  + (1|sub)',fgnospace{ii}));
         st.([fgnospace{ii} '_mean_Tstat']) = lme.Coefficients.tStat;
         st.([fgnospace{ii} '_mean_Pval']) = lme.Coefficients.pValue;
     end
