@@ -71,6 +71,9 @@ end
 [coeff, score, latent, tsquared, explained] = pca(md,'NumComponents',nc);
 fprintf('\n Variance PC1=%.2f, PC2=%.2f, PC3=%.2f, PC4=%.2f, PC5=%.2f, total=%.2f',explained(1:nc),sum(explained(1:nc)))
 
+% Compute factor analysis instead
+[lambda, psi, t, fstats, Fscore] = factoran(tractmeanmd, nc);
+
 % Add PCs into data table and fit LME
 for ii = 1:nc
     d.(sprintf('pc%d',ii))=score(:,ii);
