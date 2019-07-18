@@ -59,6 +59,10 @@ for ii = fgnums
     %fa = horzcat(fa,AFQ_get(afq,fgnames{ii},'dki_FA_noden'));
 end
 
+% Remove nans nodes?
+if removenans == 1
+    nonannodes = all(~isnan(md)); md = md(:,nonannodes);
+end
 % Compute PCA
 [coeff, score, latent, tsquared, explained] = pca(md,'NumComponents',nc);
 fprintf('\n Variance PC1=%.2f, PC2=%.2f, PC3=%.2f, PC4=%.2f, PC5=%.2f, total=%.2f',explained(1:nc),sum(explained(1:nc)))
