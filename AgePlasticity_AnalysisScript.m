@@ -6,7 +6,7 @@ load('~/git/plasticity/data/afqOut_20190715_meta.mat');
 afq.metadata.outliers = AFQ_outliers(afq, {'dki_MD_nnk'}, 4, 40);
 
 % Remove subjects with lots of motion or lots of outliers
-rmsubs = afq.metadata.outliers |  afq.metadata.motion>1.5 ...
+rmsubs = afq.metadata.outliers |  afq.metadata.motion>2 ...
     | afq.sub_group==0 | afq.metadata.session>4;
 afq = AFQ_RemoveSubjects(afq,rmsubs);
 afq = AFQ_SubjectAvgMetadata(afq);
