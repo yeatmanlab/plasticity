@@ -14,6 +14,8 @@ afq = AFQ_SubjectAvgMetadata(afq);
 % Load fibers for renderings
 fg = fgRead('~/git/plasticity/data/exampleSubject/exampleFibers.mat');
 
+% Should nans be removed before pca?
+removenans = 0;
 %% Organize data
 
 fgnames = AFQ_get(afq,'fgnames');
