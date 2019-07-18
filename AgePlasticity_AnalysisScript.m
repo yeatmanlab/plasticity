@@ -20,7 +20,7 @@ removenans = 0;
 
 fgnames = AFQ_get(afq,'fgnames');
 params = {'dki_MD_nnk'};
-nodes = 31:70;
+nodes = 11:90;
 d = table;
 d.sub = afq.sub_names;
 d.int_time = afq.metadata.int_hours-nanmean(afq.metadata.int_hours); % center hours
@@ -53,11 +53,13 @@ fgnums = [1:6 9:20];
 
 %% PCA
 nc = 5; % number of pcs
-md = []; fa = [];
+md = []; fa = []; tractmeanmd = [];
 
 % Collect diffusion properties in a matrix
 for ii = fgnums
-    md = horzcat(md,AFQ_get(afq,fgnames{ii},'dki_MD_nnk'));
+    tractmd = AFQ_get(afq,fgnames{ii},'dki_MD_nnk');
+    md = horzcat(md,tractmd);
+    tractmeanmd = horzcat(tractmeanmd,nanmean(tractmd(:,nodes),2));
     %fa = horzcat(fa,AFQ_get(afq,fgnames{ii},'dki_FA_noden'));
 end
 
@@ -74,7 +76,7 @@ for ii = 1:nc
     d.(sprintf('pc%d',ii))=score(:,ii);
     lme = fitlme(d,sprintf('pc%d ~ int_time  + (1|sub)',ii))
     pvalmat(:,ii) = lme.Coefficients.pValue;
-    lme = fitlme(d,sprintf('pc%d ~ int_time_z*age_z  + (1|sub)',ii))
+    lme = fitlme(d,sprintf('pc%d ~ int_time * age  + (1|sub)',ii))
     pvalmat2(:,ii) = lme.Coefficients.pValue;
 end
 
