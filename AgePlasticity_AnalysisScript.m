@@ -50,12 +50,16 @@ stn = table;
 stn_main = table;
 fgnums = [1:6 9:20];
 
+% abbreviated names for plot labels
+tractnames = {'LThal','RThal','LCST','RCST','LCingC','RCingC','LCingH','RCingH',...
+    'CFMajor','CFMinor','LIFOF','RIFOF','LILF','RILF','LSLF','RSLF','LUnc','RUnc','LArc','RArc'};
+
 %% PCA
 nc = 5; % number of pcs
 md = []; fa = []; tractmeanmd = [];
 
 removenans = 0; % Should nans be removed before pca?
-tractmean = 1; % use tract means rather than nodes for pca
+tractmean = 0; % use tract means rather than nodes for pca
 
 % Collect diffusion properties in a matrix
 for ii = fgnums
@@ -110,19 +114,13 @@ else
     weights4 = reshape(coeff(:,4),numel(nodes),numel(fgnums));
 end
 
+% plot weights for each tract/node
 figure, hold on, colormap('redblue')
-subplot(2,2,1), imagesc(weights1), caxis([-.2,.2]), colorbar
-set(gca,'XTick',1:numel(fgnums),'XTicklabel',afq.fgnames(fgnums),'XTickLabelRotation',45)
-title('PC 1 coeff')
-subplot(2,2,2), imagesc(weights2), caxis([-.2,.2]), colorbar
-set(gca,'XTick',1:numel(fgnums),'XTicklabel',afq.fgnames(fgnums),'XTickLabelRotation',45)
-title('PC 2 coeff')
-subplot(2,2,3), imagesc(weights3), caxis([-.2,.2]), colorbar
-set(gca,'XTick',1:numel(fgnums),'XTicklabel',afq.fgnames(fgnums),'XTickLabelRotation',45)
-title('PC 3 coeff')
-subplot(2,2,4), imagesc(weights4), caxis([-.2,.2]), colorbar
-set(gca,'XTick',1:numel(fgnums),'XTicklabel',afq.fgnames(fgnums),'XTickLabelRotation',45)
-title('PC 4 coeff')
+for ii = 1:4
+    subplot(2,2,ii), imagesc(eval(['weights',num2str(ii)])), caxis([-.2,.2]), colorbar, title(['PC ',num2str(ii)])
+    set(gca,'XTick',1:numel(fgnums),'XTicklabel',tractnames(fgnums),'XTickLabelRotation',45)
+    if tractmean == 0, ylabel('Node'), end
+end
 
 
 %% Render PCA coefficients on tracts
