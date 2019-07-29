@@ -1,12 +1,13 @@
 %% Load in data
 addpath(genpath('~/git/plasticity'))
 load('~/git/plasticity/data/afqOut_20190715_meta.mat');
+load('~/git/plasticity/data/motdisprms.mat');
 
 % See if there are any subjects with crazy outlier values
 afq.metadata.outliers = AFQ_outliers(afq, {'dki_MD_nnk'}, 4, 40);
 
 % Remove subjects with lots of motion or lots of outliers
-rmsubs = afq.metadata.outliers |  afq.metadata.motion>2 ...
+rmsubs = afq.metadata.outliers |  motionrms.storedisp>2 ...
     | afq.sub_group==0 | afq.metadata.session>4;
 afq = AFQ_RemoveSubjects(afq,rmsubs);
 afq = AFQ_SubjectAvgMetadata(afq);
@@ -14,13 +15,11 @@ afq = AFQ_SubjectAvgMetadata(afq);
 % Load fibers for renderings
 fg = fgRead('~/git/plasticity/data/exampleSubject/exampleFibers.mat');
 
-% Should nans be removed before pca?
-removenans = 0;
 %% Organize data
 
 fgnames = AFQ_get(afq,'fgnames');
 params = {'dki_MD_nnk'};
-nodes = 11:90;
+nodes = 31:70;
 d = table;
 d.sub = afq.sub_names;
 d.int_time = afq.metadata.int_hours-nanmean(afq.metadata.int_hours); % center hours
@@ -55,24 +54,29 @@ fgnums = [1:6 9:20];
 nc = 5; % number of pcs
 md = []; fa = []; tractmeanmd = [];
 
+removenans = 0; % Should nans be removed before pca?
+tractmean = 1; % use tract means rather than nodes for pca
+
 % Collect diffusion properties in a matrix
 for ii = fgnums
     tractmd = AFQ_get(afq,fgnames{ii},'dki_MD_nnk');
-    md = horzcat(md,tractmd);
-    tractmeanmd = horzcat(tractmeanmd,nanmean(tractmd(:,nodes),2));
-    %fa = horzcat(fa,AFQ_get(afq,fgnames{ii},'dki_FA_noden'));
+    tractmd = tractmd(:,nodes);
+    if tractmean == 1 % use tract means rather than nodes for pca
+        tractmd = nanmean(tractmd,2);
+    end
+    md = horzcat(md, nanzscore(tractmd)); % standardize columns
 end
 
 % Remove nans nodes?
-if removenans == 1
+if removenans == 1 && tractmean == 0
     nonannodes = all(~isnan(md)); md = md(:,nonannodes);
 end
+
 % Compute PCA
 [coeff, score, latent, tsquared, explained] = pca(md,'NumComponents',nc);
 fprintf('\n Variance PC1=%.2f, PC2=%.2f, PC3=%.2f, PC4=%.2f, PC5=%.2f, total=%.2f',explained(1:nc),sum(explained(1:nc)))
 
-% Compute factor analysis instead
-[lambda, psi, t, fstats, Fscore] = factoran(tractmeanmd, nc);
+% Compute factor analysis instead: [lambda, psi, t, fstats, Fscore] = factoran(tractmd, nc);
 
 % Add PCs into data table and fit LME
 for ii = 1:nc
@@ -83,8 +87,46 @@ for ii = 1:nc
     pvalmat2(:,ii) = lme.Coefficients.pValue;
 end
 
-%% Render PCA coefficients on tracts
+% % test the interaction if both sub groups are included in the struct
+if numel(unique(afq.sub_group)) > 1
+    lme1 = fitlme(d,'pc1 ~ int_days*sub_group + (1 | sub)')
+    lme2 = fitlme(d,'pc2 ~ int_days*sub_group + (1 | sub)')
+    lme3 = fitlme(d,'pc3 ~ int_days*sub_group + (1 | sub)')
+    lme4 = fitlme(d,'pc4 ~ int_days*sub_group + (1 | sub)')
+    lme5 = fitlme(d,'pc5 ~ int_days*sub_group + (1 | sub)')
+end
 
+%% project the PCs back into tract or node space to visualize weights
+% assumes fixed number of nodes per subject if pca is based on nodes
+if tractmean == 1
+    weights1 = coeff(:,1)';
+    weights2 = coeff(:,2)';
+    weights3 = coeff(:,3)';
+    weights4 = coeff(:,4)';
+else
+    weights1 = reshape(coeff(:,1),numel(nodes),numel(fgnums));
+    weights2 = reshape(coeff(:,2),numel(nodes),numel(fgnums));
+    weights3 = reshape(coeff(:,3),numel(nodes),numel(fgnums));
+    weights4 = reshape(coeff(:,4),numel(nodes),numel(fgnums));
+end
+
+figure, hold on, colormap('redblue')
+subplot(2,2,1), imagesc(weights1), caxis([-.2,.2]), colorbar
+set(gca,'XTick',1:numel(fgnums),'XTicklabel',afq.fgnames(fgnums),'XTickLabelRotation',45)
+title('PC 1 coeff')
+subplot(2,2,2), imagesc(weights2), caxis([-.2,.2]), colorbar
+set(gca,'XTick',1:numel(fgnums),'XTicklabel',afq.fgnames(fgnums),'XTickLabelRotation',45)
+title('PC 2 coeff')
+subplot(2,2,3), imagesc(weights3), caxis([-.2,.2]), colorbar
+set(gca,'XTick',1:numel(fgnums),'XTicklabel',afq.fgnames(fgnums),'XTickLabelRotation',45)
+title('PC 3 coeff')
+subplot(2,2,4), imagesc(weights4), caxis([-.2,.2]), colorbar
+set(gca,'XTick',1:numel(fgnums),'XTicklabel',afq.fgnames(fgnums),'XTickLabelRotation',45)
+title('PC 4 coeff')
+
+
+%% Render PCA coefficients on tracts
+s
 cax = [-.03 .03]; % color range
 cmap = [linspace(.1,1,128)',linspace(.1,1,128)',linspace(.8,1,128)';...
     linspace(1,.8,128)',linspace(1,.1,128)',linspace(1,.1,128)']
