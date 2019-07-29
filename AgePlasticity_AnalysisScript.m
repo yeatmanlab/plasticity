@@ -1,13 +1,13 @@
 %% Load in data
 addpath(genpath('~/git/plasticity'))
-load('~/git/plasticity/data/afqOut_20190715_meta.mat');
-load('~/git/plasticity/data/motdisprms.mat');
+load('~/git/plasticity/data/afqOut_20190715_meta_motion.mat');
+% load('~/git/plasticity/data/motdisprms.mat');
 
 % See if there are any subjects with crazy outlier values
 afq.metadata.outliers = AFQ_outliers(afq, {'dki_MD_nnk'}, 4, 40);
 
-% Remove subjects with lots of motion or lots of outliers
-rmsubs = afq.metadata.outliers |  motionrms.storedisp>2 ...
+% Remove subjects with lots of motion or lots of outliers 
+rmsubs = afq.metadata.outliers |  afq.metadata.motion>2 ...
     | afq.sub_group==0 | afq.metadata.session>4;
 afq = AFQ_RemoveSubjects(afq,rmsubs);
 afq = AFQ_SubjectAvgMetadata(afq);
@@ -126,7 +126,7 @@ title('PC 4 coeff')
 
 
 %% Render PCA coefficients on tracts
-s
+
 cax = [-.03 .03]; % color range
 cmap = [linspace(.1,1,128)',linspace(.1,1,128)',linspace(.8,1,128)';...
     linspace(1,.8,128)',linspace(1,.1,128)',linspace(1,.1,128)']
