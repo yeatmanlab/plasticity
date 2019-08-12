@@ -7,8 +7,8 @@ load('~/git/plasticity/data/afqOut_20190715_meta_motion.mat');
 afq.metadata.outliers = AFQ_outliers(afq, {'dki_MD_nnk'}, 4, 40);
 
 % Remove subjects with lots of motion or lots of outliers 
-rmsubs = afq.metadata.outliers |  afq.metadata.motion>2 ...
-    | afq.sub_group==0 | afq.metadata.session>4;
+rmsubs = afq.metadata.outliers |  afq.metadata.motion>3 ...
+     | afq.metadata.session>4 | afq.sub_group==0;
 afq = AFQ_RemoveSubjects(afq,rmsubs);
 afq = AFQ_SubjectAvgMetadata(afq);
 
@@ -19,7 +19,7 @@ fg = fgRead('~/git/plasticity/data/exampleSubject/exampleFibers.mat');
 
 fgnames = AFQ_get(afq,'fgnames');
 params = {'dki_MD_nnk'};
-nodes = 31:70;
+nodes = 21:80;
 d = table;
 d.sub = afq.sub_names;
 d.int_time = afq.metadata.int_hours-nanmean(afq.metadata.int_hours); % center hours
@@ -35,6 +35,7 @@ d.wj = afq.metadata.wj_brs;
 d.towre = afq.metadata.twre_index;
 d.sess = categorical(afq.metadata.session);
 d.sessN = afq.metadata.session;
+d.sub_group = categorical(afq.sub_group);
 
 % Add timepoint 1 age
 usubs = unique(d.sub);
@@ -58,8 +59,9 @@ tractnames = {'LThal','RThal','LCST','RCST','LCingC','RCingC','LCingH','RCingH',
 nc = 5; % number of pcs
 md = []; fa = []; tractmeanmd = [];
 
-removenans = 0; % Should nans be removed before pca?
-tractmean = 0; % use tract means rather than nodes for pca
+removenans = 1; % Should nans be removed before pca?
+tractmean = 1; % use tract means rather than nodes for pca
+zscorecols = 1; % Whether or not to zscore each columns
 
 % Collect diffusion properties in a matrix
 for ii = fgnums
@@ -68,7 +70,11 @@ for ii = fgnums
     if tractmean == 1 % use tract means rather than nodes for pca
         tractmd = nanmean(tractmd,2);
     end
-    md = horzcat(md, nanzscore(tractmd)); % standardize columns
+    if zscorecols == 1
+        md = horzcat(md, nanzscore(tractmd)); % standardize columns
+    else
+        md = horzcat(md, tractmd); % standardize columns
+    end
 end
 
 % Remove nans nodes?
@@ -89,15 +95,6 @@ for ii = 1:nc
     pvalmat(:,ii) = lme.Coefficients.pValue;
     lme = fitlme(d,sprintf('pc%d ~ int_time * age  + (1|sub)',ii))
     pvalmat2(:,ii) = lme.Coefficients.pValue;
-end
-
-% % test the interaction if both sub groups are included in the struct
-if numel(unique(afq.sub_group)) > 1
-    lme1 = fitlme(d,'pc1 ~ int_days*sub_group + (1 | sub)')
-    lme2 = fitlme(d,'pc2 ~ int_days*sub_group + (1 | sub)')
-    lme3 = fitlme(d,'pc3 ~ int_days*sub_group + (1 | sub)')
-    lme4 = fitlme(d,'pc4 ~ int_days*sub_group + (1 | sub)')
-    lme5 = fitlme(d,'pc5 ~ int_days*sub_group + (1 | sub)')
 end
 
 %% project the PCs back into tract or node space to visualize weights
@@ -122,13 +119,14 @@ for ii = 1:4
     if tractmean == 0, ylabel('Node'), end
 end
 
-
 %% Render PCA coefficients on tracts
 
+numnodes = length(nodes);
+emptynodecolor = [.3 .3 .3]; % Color to use for nodes that were excluded
 cax = [-.03 .03]; % color range
 cmap = [linspace(.1,1,128)',linspace(.1,1,128)',linspace(.8,1,128)';...
     linspace(1,.8,128)',linspace(1,.1,128)',linspace(1,.1,128)']
-numf = 200;
+numf = 20;
 % Loop over PCs
 for pp = 1:nc
     
@@ -137,11 +135,20 @@ for pp = 1:nc
     for ff = fgnums
         fgc=fgc+1;
         % These are the rows containing the coeffs for fg(ff)
-        rows = coeff((fgc-1)*100+1:fgc*100,:);
+        if tractmean == 0
+            rows = coeff((fgc-1)*numnodes+1:fgc*numnodes,:);
+        else
+            rows = coeff(fgc,:);
+            rows = repmat(rows,[numnodes 1]);
+        end
         
         % create color values for pc
         c = vals2colormap(rows(:,pp),cmap,cax);
         
+        % Add in gray for nodes that were removed
+        if numnodes < 100
+           c = vertcat(repmat(emptynodecolor,[min(nodes)-1,1]),c,repmat(emptynodecolor,[length((max(nodes)+1):100),1]));
+        end
         % Resample fibers to 100 nodes
         fgt = dtiResampleFiberGroup(fg(ff),100);
         for fff = 1:length(fgt.fibers)
@@ -473,14 +480,14 @@ print('PvalueHist_MainEffect.eps','-depsc');
 
 %% Show growth trajectories for younger versus older subjects
 
-% Fit separate models for PC1
+% Fit separate models for PC1 by session
 lme = fitlme(d,'pc1 ~ sess + (1 | sub)')
 lmeY = fitlme(d(d.young,:),'pc1 ~ sess + (1 | sub)');
 lmeO = fitlme(d(~d.young,:),'pc1 ~ sess + (1 | sub)');
 
 % Plot results
 figure;
-subplot(1,2,1);hold
+ph(1) = subplot(1,4,1);hold
 errorbar([lme.Coefficients.Estimate(1), lme.Coefficients.Estimate(2:end)'+lme.Coefficients.Estimate(1)],...
     lme.Coefficients.SE, '-o','linewidth',3,'color', [.5 0 .5],'markerfacecolor', [.5 0 .5]);
 plot([lmeY.Coefficients.Estimate(1), lmeY.Coefficients.Estimate(2:end)'+lmeY.Coefficients.Estimate(1)],...
@@ -490,7 +497,23 @@ plot([lmeO.Coefficients.Estimate(1), lmeO.Coefficients.Estimate(2:end)'+lmeO.Coe
 grid on;set(gca,'gridalpha',.4)
 set(gca,'fontsize',14)
 xlabel('Session','fontname','Helvetica','fontsize',16),ylabel('Mean diffusivity (\mum^2/ms)','fontname','Helvetica','fontsize',16)
-
+% Now the linear change over hours of intervention
+lme = fitlme(d,'pc1 ~ int_time + (1 | sub)')
+lmeY = fitlme(d(d.young,:),'pc1 ~ int_time + (1 | sub)');
+lmeO = fitlme(d(~d.young,:),'pc1 ~ int_time + (1 | sub)');
+ph(2) = subplot(1,4,2);hold
+bar(1,lme.Coefficients.Estimate(2),'facecolor',[.5 0 .5]);
+bar(2,lmeY.Coefficients.Estimate(2),'facecolor',[.7 0 0]);
+bar(3,lmeO.Coefficients.Estimate(2),'facecolor',[0 0 .7]);
+errorbar([1 2 3],[lme.Coefficients.Estimate(2) lmeY.Coefficients.Estimate(2) lmeO.Coefficients.Estimate(2)],...
+    [lme.Coefficients.SE(2) lmeY.Coefficients.SE(2) lmeO.Coefficients.SE(2)],...
+    '.','linewidth',2,'color', [0 0 0]);
+set(gca,'xtick',[1 2 3],'xticklabels',{'All' 'Younger' 'Older'});xtickangle(30);
+axis('tight');
+pos = get(ph(2),'position');
+set(ph(2),'position',pos .* [1.05 1 .5 1])
+set(gca,'fontsize',14)
+ylabel('Change per hour of intervention','fontname','Helvetica','fontsize',16)
 
 % Repeate for behavior
 lme = fitlme(d,'wj ~ sess + (1 | sub)')
@@ -498,7 +521,7 @@ lmeY = fitlme(d(d.young,:),'wj ~ sess + (1 | sub)');
 lmeO = fitlme(d(~d.young,:),'wj ~ sess + (1 | sub)');
 
 % Plot results
-subplot(1,2,2);hold
+ph(3) = subplot(1,4,3);hold
 h(1) = errorbar([lme.Coefficients.Estimate(1), lme.Coefficients.Estimate(2:end)'+lme.Coefficients.Estimate(1)],...
     lme.Coefficients.SE, '-o','linewidth',3,'color', [.5 0 .5],'markerfacecolor', [.5 0 .5]);
 h(2) = plot([lmeY.Coefficients.Estimate(1), lmeY.Coefficients.Estimate(2:end)'+lmeY.Coefficients.Estimate(1)],...
@@ -509,9 +532,29 @@ grid on;set(gca,'gridalpha',.4)
 set(gca,'fontsize',14)
 xlabel('Session','fontname','Helvetica','fontsize',16);ylabel('Basic Reading Skills (standard score)','fontname','Helvetica','fontsize',16);
 legend(h,{'All' 'Younger' 'Older'},'location','NorthWest')
-set(gcf, 'Position',  [100, 100, 600, 350]);
+pos = get(ph(3),'position');
+set(ph(3),'position',pos .* [1 1 1 1] - [.03 0 0 0])
+
+% Now the linear change over hours of intervention
+lme = fitlme(d,'wj ~ int_time + (1 | sub)')
+lmeY = fitlme(d(d.young,:),'wj ~ int_time + (1 | sub)');
+lmeO = fitlme(d(~d.young,:),'wj ~ int_time + (1 | sub)');
+ph(4) = subplot(1,4,4);hold
+bar(1,lme.Coefficients.Estimate(2),'facecolor',[.5 0 .5]);
+bar(2,lmeY.Coefficients.Estimate(2),'facecolor',[.7 0 0]);
+bar(3,lmeO.Coefficients.Estimate(2),'facecolor',[0 0 .7]);
+errorbar([1 2 3],[lme.Coefficients.Estimate(2) lmeY.Coefficients.Estimate(2) lmeO.Coefficients.Estimate(2)],...
+    [lme.Coefficients.SE(2) lmeY.Coefficients.SE(2) lmeO.Coefficients.SE(2)],...
+    '.','linewidth',2,'color', [0 0 0]);
+set(gca,'xtick',[1 2 3],'xticklabels',{'All' 'Younger' 'Older'});xtickangle(30);
+axis('tight');
+pos = get(ph(4),'position');
+set(ph(4),'position',pos .* [1 1 .5 1] - [.025 0 0 0]);
+set(gca,'fontsize',14)
+ylabel('Change per hour of intervention','fontname','Helvetica','fontsize',16)
 
 % Save
+set(gcf, 'Position',  [100, 100, 1300, 400]);
 print('Figure3_GrowthCurves.eps','-depsc')
 
 %% Does behavioral growth depend on age?
