@@ -222,6 +222,8 @@ for ii = 1:length(usubs)
     
     % Make one entry for subject age
     ind.age(ii) = mean(d2(strcmp(d2.sub, usubs{ii}),:).age);
+    % add timepoint 1 brs score
+    ind.wj(ii) = d2(strcmp(d2.sub, usubs{ii}),:).wj(1);
     
     % Loop over fiber groups
     for ff = fgnums
@@ -263,6 +265,12 @@ for ff = 1:nc
     fprintf('\nPC%d,T-test against zero change t(%d)=%.2f, p=%.2f\n',ff,stats.df,stats.tstat,pval);
 end
 
+% Report stats relating individual PC change and initial reading score
+for ff = 1:nc
+    [rval, pval] = corr(ind.wj,ind.(['pc' num2str(ff) '_sl']));
+    fprintf('\nPC%d\tr=%.2f\tp=%.2f\tBF=%.2f',ff,rval,pval,corrbf(rval,length(ind.age)));
+end
+
 %% Redo analysis just looking at first 2 timepoints
 
 % Get the names of all the subjects
@@ -293,6 +301,7 @@ for ii = 1:length(usubs2)
     
     % add initial age
     ind2.age(ii) = d3(strcmp(d3.sub, usubs2{ii}),:).age1(1);
+    
     % Loop over PCs
     for ff = 1:nc
         lm =  polyfit(d3(strcmp(d3.sub, usubs2{ii}),:).int_time,...
